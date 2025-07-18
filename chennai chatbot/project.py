@@ -6,9 +6,8 @@ st.set_page_config(page_title="Chennai Risk Chatbot", page_icon="🧠")
 st.title("🧠 Chennai Risk Chatbot")
 st.write("Ask me about *accident, **air pollution, **crime, **heat, **flood,**population, **riskfactor data!")
 
-import os
-print("Working directory:", os.getcwd())
-print("Files in current directory:", os.listdir())
+st.write("📂 Current working directory:", os.getcwd())
+st.write("📄 Files in this directory:", os.listdir())
 
 # Load Excel files
 accident_df = pd.read_excel("accident1.xlsx")
