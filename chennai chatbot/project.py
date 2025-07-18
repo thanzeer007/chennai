@@ -1,13 +1,15 @@
 import streamlit as st
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
+
+st.write("📂 Current working directory:", os.getcwd())
+st.write("📄 Files in this directory:", os.listdir())
+
 
 st.set_page_config(page_title="Chennai Risk Chatbot", page_icon="🧠")
 st.title("🧠 Chennai Risk Chatbot")
 st.write("Ask me about *accident, **air pollution, **crime, **heat, **flood,**population, **riskfactor data!")
-
-st.write("📂 Current working directory:", os.getcwd())
-st.write("📄 Files in this directory:", os.listdir())
 
 # Load Excel files
 accident_df = pd.read_excel("accident1.xlsx")
