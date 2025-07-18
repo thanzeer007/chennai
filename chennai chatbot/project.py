@@ -12,13 +12,13 @@ st.title("🧠 Chennai Risk Chatbot")
 st.write("Ask me about *accident, **air pollution, **crime, **heat, **flood,**population, **riskfactor data!")
 
 # Load Excel files
-accident_df = pd.read_excel("accident1.xlsx")
-air_df = pd.read_excel("air pollution.xlsx")
-crime_df = pd.read_excel("crime details 1.xlsx")
-heat_df=pd.read_excel("heat.xlsx")
-flood_df=pd.read_excel("flood.xlsx")
-population_df=pd.read_excel("population.xlsx")
-Riskfactor_df=pd.read_excel("riskanalysis.xlsx")
+accident_df = pd.read_excel("chennai chatbot/accident1.xlsx")
+air_df = pd.read_excel("chennai chatbot/air pollution.xlsx")
+crime_df = pd.read_excel("chennai chatbot/crime details 1.xlsx")
+heat_df=pd.read_excel("chennai chatbot/heat.xlsx")
+flood_df=pd.read_excel("chennai chatbot/flood.xlsx")
+population_df=pd.read_excel("chennai chatbot/population.xlsx")
+Riskfactor_df=pd.read_excel("chennai chatbot/riskanalysis.xlsx")
 
 user_input = st.text_input("💬 Your question:")
 
