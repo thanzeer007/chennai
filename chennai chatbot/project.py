@@ -1,49 +1,140 @@
 import streamlit as st
-import os
 import pandas as pd
 import matplotlib.pyplot as plt
+from transformers import pipeline  # type: ignore
+import os
 
+# ✅ Set working directory to script location
+DATA_DIR = os.path.dirname(os.path.abspath(_file_))
 
+# ✅ Streamlit setup
 st.set_page_config(page_title="Chennai Risk Chatbot", page_icon="🧠")
 st.title("🧠 Chennai Risk Chatbot")
-st.write("Ask me about *accident, **air pollution, **crime, **heat, **flood,**population, **riskfactor data!")
 
-# Load Excel files
-accident_df = pd.read_excel("chennai chatbot/accident1.xlsx")
-air_df = pd.read_excel("chennai chatbot/air pollution.xlsx")
-crime_df = pd.read_excel("chennai chatbot/crime details 1.xlsx")
-heat_df=pd.read_excel("chennai chatbot/heat.xlsx")
-flood_df=pd.read_excel("chennai chatbot/flood.xlsx")
-population_df=pd.read_excel("chennai chatbot/population.xlsx")
-Riskfactor_df=pd.read_excel("chennai chatbot/riskanalysis.xlsx")
+# ✅ Load Excel files
+def load_data():
+    try:
+        return {
+            "accident": pd.read_excel(os.path.join(DATA_DIR, "accident1.xlsx")),
+            "air pollution": pd.read_excel(os.path.join(DATA_DIR, "air pollution.xlsx")),
+            "crime": pd.read_excel(os.path.join(DATA_DIR, "crime details 1.xlsx")),
+            "heat": pd.read_excel(os.path.join(DATA_DIR, "heat.xlsx")),
+            "flood": pd.read_excel(os.path.join(DATA_DIR, "flood.xlsx")),
+            "population": pd.read_excel(os.path.join(DATA_DIR, "population.xlsx")),
+            "riskfactor": pd.read_excel(os.path.join(DATA_DIR, "riskanalysis.xlsx"))
+        }
+    except FileNotFoundError as e:
+        st.error(f"📂 Missing file: {e.filename}")
+        st.stop()
 
-user_input = st.text_input("💬 Your question:")
+data = load_data()
+
+# ✅ Load NLP model (zero-shot classification)
+with st.spinner("🔄 Loading NLP model... (may take a minute)"):
+    try:
+        classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+    except Exception:
+        st.error("❌ Error loading NLP model. Ensure internet is available and 'transformers' is installed.")
+        st.stop()
+
+# ✅ NLP-based intent detection
+def detect_intent(user_input):
+    labels = list(data.keys())
+    result = classifier(user_input, candidate_labels=labels)
+    return result["labels"][0]
+
+# ✅ Friendly AI-style reply generator
+def generate_response(user_input, intent):
+    greetings = ["hi", "hello", "hey"]
+    if any(g in user_input.lower() for g in greetings):
+        return "👋 Hello! I'm your Chennai Risk Assistant. Ask me anything about accidents, crime, floods, or more."
+
+    if intent in data:
+        return f"Great question! Let's explore *{intent}* risk data in Chennai. You can choose an area below to view more details and a chart."
+    
+    return "Hmm, I didn't catch that. Can you rephrase or ask about accident, crime, flood, heat, etc.?"
+
+# ✅ Use chat-based UI
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Show chat history
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# User input box
+user_input = st.chat_input("Ask anything about Chennai's risks...")
 
 if user_input:
-    query = user_input.lower()
+    with st.chat_message("user"):
+        st.markdown(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # ---------------- Accident Data ----------------
-    if "accident" in query or "hospital" in query:
-        st.subheader("🚧 Accident Data")
+    # Detect intent and get dataset
+    intent = detect_intent(user_input)
+    df = data[intent]
 
-        zones = accident_df["Zone / Area"].unique()
-        selected_zone = st.selectbox("📍 Select Zone (Accident):", sorted(zones))
-        filtered_data = accident_df[accident_df["Zone / Area"] == selected_zone]
-        st.write(f"Showing accident data for *{selected_zone}*")
+    # Friendly assistant reply
+    assistant_msg = generate_response(user_input, intent)
+    st.session_state.messages.append({"role": "assistant", "content": assistant_msg})
+    with st.chat_message("assistant"):
+        st.markdown(assistant_msg)
+
+    # Show data and charts if not just small talk
+    if intent in data:
+        # Column mapping setup
+        zone_column = None
+        value_column = None
+        color = "gray"
+
+        if intent == "accident":
+            zone_column = "Zone / Area"
+            value_column = "No. of Cases"
+            color = "crimson"
+        elif intent == "air pollution":
+            zone_column = "Zone / Area"
+            value_column = "Avg. Value (µg/m³) or AQI"
+            color = "green"
+        elif intent == "crime":
+            zone_column = "Zone Name"
+            value_column = "Total Crimes"
+            color = "blue"
+        elif intent == "heat":
+            zone_column = "Area"
+            value_column = "Heatstroke Cases"
+            color = "orange"
+        elif intent == "flood":
+            zone_column = "Area"
+            value_column = "People Affected"
+            color = "black"
+        elif intent == "population":
+            zone_column = "Zone Name"
+            value_column = "Population"
+            color = "purple"
+        elif intent == "riskfactor":
+            st.dataframe(df)
+            st.stop()
+
+        # Process and clean
+        df.columns = df.columns.str.strip()
+        df[value_column] = pd.to_numeric(df[value_column], errors="coerce")
+        df = df.dropna(subset=[zone_column, value_column])
+
+        # Dropdown for zone selection
+        zones = df[zone_column].dropna().unique()
+        selected_zone = st.selectbox(f"📍 Select {zone_column}:", sorted(zones))
+        filtered_data = df[df[zone_column] == selected_zone]
         st.dataframe(filtered_data)
 
-        accident_df.columns = accident_df.columns.str.strip()
-        accident_df["No. of Cases"] = pd.to_numeric(accident_df["No. of Cases"], errors="coerce")
-        accident_df = accident_df.dropna(subset=["Zone / Area", "No. of Cases"])
-        st.write("### 🔎 Zone-wise Accident Overview")
-
-        chart_data = accident_df[["Zone / Area", "No. of Cases"]].copy()
-        chart_data = chart_data.groupby("Zone / Area").sum().sort_values("No. of Cases", ascending=False)
+        # Bar chart
+        chart_data = df[[zone_column, value_column]].copy()
+        chart_data = chart_data.groupby(zone_column).sum().sort_values(value_column, ascending=False)
 
         fig, ax = plt.subplots(figsize=(12, 6))
-        bars = ax.bar(chart_data.index, chart_data["No. of Cases"], color='crimson')
-        ax.set_ylabel("No. of Cases")
-        ax.set_title("Zone-wise Accident Cases")
+        bars = ax.bar(chart_data.index, chart_data[value_column], color=color)
+        ax.set_ylabel(value_column)
+        ax.set_title(f"{intent.capitalize()} Overview by {zone_column}")
         plt.xticks(rotation=45, ha='right')
 
         for bar in bars:
@@ -55,217 +146,3 @@ if user_input:
                         ha='center', va='bottom')
 
         st.pyplot(fig)
-
-    # ---------------- Air Pollution Data ----------------
-    elif "pollution" in query or "air" in query:
-        st.subheader("🌫 Air Pollution Data")
-
-        zones = air_df["Zone / Area"].dropna().unique()
-        selected_zone = st.selectbox("📍 Select Zone / Area (Air Pollution):", sorted(zones))
-
-        filtered_data = air_df[air_df["Zone / Area"] == selected_zone]
-        st.write(f"Showing air quality data for *{selected_zone}*")
-        st.dataframe(filtered_data)  
-
-        air_df.columns = air_df .columns.str.strip()
-        air_df ["Avg. Value (µg/m³) or AQI"] = pd.to_numeric(air_df ["Avg. Value (µg/m³) or AQI"], errors="coerce")
-        air_df  = air_df .dropna(subset=["Zone / Area", "Avg. Value (µg/m³) or AQI"])
-
-        st.write("### 🔎 Zone-wise Airpollution Overview")
-
-        chart_data = air_df [["Zone / Area", "Avg. Value (µg/m³) or AQI"]].copy()
-        chart_data = chart_data.groupby("Zone / Area").sum().sort_values("Avg. Value (µg/m³) or AQI", ascending=False)
-
-        fig, ax = plt.subplots(figsize=(12, 6))
-        bars = ax.bar(chart_data.index, chart_data["Avg. Value (µg/m³) or AQI"], color='grey')
-        ax.set_ylabel("Avg. Value (µg/m³) or AQI")
-        ax.set_title("Zone-wise air pollution Cases")
-        plt.xticks(rotation=45, ha='right')
-
-        for bar in bars:
-            height = bar.get_height()
-            ax.annotate(f'{int(height)}',
-                        xy=(bar.get_x() + bar.get_width() / 2, height),
-                        xytext=(0, 3),
-                        textcoords="offset points",
-                        ha='center', va='bottom')
-
-        st.pyplot(fig)
-
-    # ---------------- Crime Data ----------------
-    elif "crime" in query or "theft" in query or "assault" in query or "cyber" in query or "women" in query:
-        st.subheader("🚔 Crime Data")
-
-        zones = crime_df["Zone Name"].dropna().unique()
-        selected_zone = st.selectbox("📍 Select Zone (Crime):", sorted(zones))
-
-        filtered_data = crime_df[crime_df["Zone Name"] == selected_zone]
-        st.write(f"Showing crime data for *{selected_zone}*")
-        st.dataframe(filtered_data)
-
-        crime_df.columns = crime_df .columns.str.strip()
-        crime_df ["Total Crimes"] = pd.to_numeric(crime_df["Total Crimes"], errors="coerce")
-        crime_df  = crime_df .dropna(subset=["Zone Name", "Total Crimes"])
-
-        st.write("### 🔎 Zone-wise Crime Overview")
-
-        chart_data = crime_df [["Zone Name", "Total Crimes"]].copy()
-        chart_data = chart_data.groupby("Zone Name").sum().sort_values("Total Crimes", ascending=False)
-    
-        fig, ax = plt.subplots(figsize=(12, 6))
-        bars = ax.bar(chart_data.index, chart_data["Total Crimes"], color='Blue')
-        ax.set_ylabel("Total Crimes")
-        ax.set_title("Zone-wise Crime Cases")
-        plt.xticks(rotation=45, ha='right')
-
-        for bar in bars:
-            height = bar.get_height()
-            ax.annotate(f'{int(height)}',
-                        xy=(bar.get_x() + bar.get_width() / 2, height),
-                        xytext=(0, 3),
-                        textcoords="offset points",
-                        ha='center', va='bottom')
-
-        st.pyplot(fig)
-
-
-    elif "heat" in query or "year" in query or "Heatstroke Cases" in query or "Dehydration Cases" in query or "Hospitalizations" in query:
-        st.subheader("🥵 Heat Data")
-
-        zones = heat_df["Area"].dropna().unique()
-        selected_zone = st.selectbox("📍 Select Zone (heat):", sorted(zones))
-
-        filtered_data = heat_df[heat_df["Area"] == selected_zone]
-        st.write(f"Showing crime data for *{selected_zone}*")
-        st.dataframe(filtered_data)
-
-        heat_df.columns = heat_df .columns.str.strip()
-        heat_df ["Heatstroke Cases"] = pd.to_numeric(heat_df["Heatstroke Cases"], errors="coerce")
-        heat_df  = heat_df.dropna(subset=["Area", "Heatstroke Cases"])
-        st.write("### 🔎 Zone-wise Crime Overview")
-
-        chart_data = heat_df[["Area", "Heatstroke Cases"]].copy()
-        chart_data = chart_data.groupby("Area").sum().sort_values("Heatstroke Cases", ascending=False)
-
-        fig, ax = plt.subplots(figsize=(12, 6))
-        bars = ax.bar(chart_data.index, chart_data["Heatstroke Cases"], color='orange')
-        ax.set_ylabel("Heatstroke Cases")
-        ax.set_title("Zone-wise Heat Cases")
-        plt.xticks(rotation=45, ha='right')
-
-        for bar in bars:
-            height = bar.get_height()
-            ax.annotate(f'{int(height)}',
-                        xy=(bar.get_x() + bar.get_width() / 2, height),
-                        xytext=(0, 3),
-                        textcoords="offset points",
-                        ha='center', va='bottom')
-
-        st.pyplot(fig)
-    
-    elif "flood" in query or "rainfall" in query:
-        st.subheader("🌊Flood Data")
-
-        zones = flood_df["Area"].dropna().unique()
-        selected_zone = st.selectbox("📍 Select Zone (flood):", sorted(zones))
-
-        filtered_data = flood_df[flood_df["Area"] == selected_zone]
-        st.write(f"Showing crime data for *{selected_zone}*")
-        st.dataframe(filtered_data)
-
-        flood_df.columns =flood_df .columns.str.strip()
-        flood_df ["People Affected"] = pd.to_numeric(flood_df["People Affected"], errors="coerce")
-        flood_df = flood_df .dropna(subset=["Area", "People Affected"])
-
-        st.write("### 🔎 Zone-wise flood Overview")
-        chart_data = flood_df [["Area", "People Affected"]].copy()
-        chart_data = chart_data.groupby("Area").sum().sort_values("People Affected", ascending=False)
-
-        fig, ax = plt.subplots(figsize=(12, 6))
-        bars = ax.bar(chart_data.index, chart_data["People Affected"], color='black')
-        ax.set_ylabel("People Affected")
-        ax.set_title("Zone-wise flood Cases")
-        plt.xticks(rotation=45, ha='right')
-
-        for bar in bars:
-            height = bar.get_height()
-            ax.annotate(f'{int(height)}',
-                        xy=(bar.get_x() + bar.get_width() / 2, height),
-                        xytext=(0, 3),
-                        textcoords="offset points",
-                        ha='center', va='bottom')
-
-        st.pyplot(fig)
-
-    elif "population" in query or "citizens" in query:
-        st.subheader("👩‍👩‍👧‍👦 Population Data")
-
-        zones = population_df["Zone Name"].dropna().unique()
-        selected_zone = st.selectbox("📍 Select Zone (Population):", sorted(zones))
-
-        filtered_data = population_df[population_df["Zone Name"] == selected_zone]
-        st.write(f"Showing crime data for *{selected_zone}*")
-        st.dataframe(filtered_data) 
-
-        population_df.columns = population_df.columns.str.strip()
-        population_df["Population"] = pd.to_numeric(population_df["Population"], errors="coerce")
-        population_df = population_df.dropna(subset=["Zone Name", "Population"])
-
-        st.write("### 🔎 Zone-wise Population Overview")
-
-        chart_data = population_df[["Zone Name", "Population"]].copy()
-        chart_data = chart_data.groupby("Zone Name").sum().sort_values("Population", ascending=False)
-
-        fig, ax = plt.subplots(figsize=(12, 6))
-        bars = ax.bar(chart_data.index, chart_data["Population"], color='purple')
-        ax.set_ylabel("Population")
-        ax.set_title("Zone-wise Population Cases")
-        plt.xticks(rotation=45, ha='right')
-
-        for bar in bars:
-            height = bar.get_height()
-            ax.annotate(f'{int(height)}',
-                        xy=(bar.get_x() + bar.get_width() / 2, height),
-                        xytext=(0, 3),
-                        textcoords="offset points",
-                        ha='center', va='bottom')
-
-        st.pyplot(fig)   
-
-    elif "riskfactor" in query or "percentage" in query:
-        st.subheader("🚨 Risk factor Data")
-
-        zones = Riskfactor_df["Area"].dropna().unique()
-        selected_zone = st.selectbox("📍 Select Zone (Riskfactor):", sorted(zones))
-
-        filtered_data = Riskfactor_df[Riskfactor_df["Area"] == selected_zone]
-        st.write(f"Showing crime data for *{selected_zone}*")
-        st.dataframe(filtered_data) 
-
-        st.write("📊 Risk Levels for Each Zone")
-        melted_df = Riskfactor_df.melt(
-            id_vars=["Area"],
-            value_vars=["Accident", "Air Pollution", "Flood", "Heat", "Crime", "Population"],
-            var_name="Risk Type",
-            value_name="Level"
-        )
-
-        plt.figure(figsize=(14, 6))
-        ax = plt.subplot()
-
-        pivot_df = melted_df.pivot(index="Area", columns="Risk Type", values="Level")
-        pivot_df.plot(kind="bar", ax=ax, colormap="coolwarm", edgecolor='black')
-
-        plt.title("Risk Factor Levels by Zone")
-        plt.xlabel("Zone")
-        plt.ylabel("Risk Level (1=Low, 2=Medium, 3=High)")
-        plt.xticks(rotation=45, ha='right')
-        plt.legend(title="Risk Type", bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.tight_layout()
-
-        st.pyplot(plt)   
-        
-    
-
-    else:
-        st.warning("❓ Sorry, I didn't understand. Try asking about *accident, **air pollution, **crime, **heat, **flood, **population*, **riskfactor*.")
