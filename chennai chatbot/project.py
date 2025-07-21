@@ -3,15 +3,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import spacy
-import subprocess  # To handle model download
+import spacy.cli
+import subprocess
 
-# Automatically download spaCy model if missing
-try:
-    nlp = spacy.load("en_core_web_sm")
-except:
-    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
-    nlp = spacy.load("en_core_web_sm")
-
+# Always download the model on server
+spacy.cli.download("en_core_web_sm")
+nlp = spacy.load("en_core_web_sm")
 # Streamlit page config
 st.set_page_config(page_title="Chennai Risk Chatbot AI", page_icon="🧠")
 st.markdown("""
