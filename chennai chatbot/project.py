@@ -3,7 +3,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import spacy
+import subprocess  # To handle model download
 
+# Automatically download spaCy model if missing
+try:
+    nlp = spacy.load("en_core_web_sm")
+except:
+    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
+    nlp = spacy.load("en_core_web_sm")
+
+# Streamlit page config
 st.set_page_config(page_title="Chennai Risk Chatbot AI", page_icon="🧠")
 st.markdown("""
     <style>
@@ -20,7 +29,7 @@ st.markdown("""
 st.title("🤖 Chennai AI Risk Chatbot")
 st.markdown("<p class='big-font'>Ask about <span class='highlight'>accidents, pollution, crime, heat, flood, population, or risk factors</span>.</p>", unsafe_allow_html=True)
 
-# Load data
+# Load Excel files
 accident_df = pd.read_excel("accident1.xlsx")
 air_df = pd.read_excel("air pollution.xlsx")
 crime_df = pd.read_excel("crime details 1.xlsx")
@@ -29,10 +38,7 @@ flood_df = pd.read_excel("flood.xlsx")
 population_df = pd.read_excel("population.xlsx")
 Riskfactor_df = pd.read_excel("riskanalysis.xlsx")
 
-# Load NLP model
-nlp = spacy.load("en_core_web_sm")
-
-# Combine all zones for detection
+# Combine all zone names
 all_zones = set(accident_df["Zone / Area"].dropna().unique()) | \
             set(air_df["Zone / Area"].dropna().unique()) | \
             set(crime_df["Zone Name"].dropna().unique()) | \
@@ -41,11 +47,10 @@ all_zones = set(accident_df["Zone / Area"].dropna().unique()) | \
             set(population_df["Zone Name"].dropna().unique()) | \
             set(Riskfactor_df["Area"].dropna().unique())
 
-# Get input from user
+# Input field
 user_input = st.chat_input("Type your questions here...")
 
-# Detect zone from user input
-
+# Detect zone
 def detect_zone(user_input, zones):
     doc = nlp(user_input.lower())
     for ent in doc.ents:
@@ -56,7 +61,7 @@ def detect_zone(user_input, zones):
             return z
     return None
 
-# Bar chart function
+# Bar chart display
 def bar_chart(df, x_col, y_col, title, color):
     df.columns = df.columns.str.strip()
     df[y_col] = pd.to_numeric(df[y_col], errors="coerce")
@@ -74,7 +79,7 @@ def bar_chart(df, x_col, y_col, title, color):
                     textcoords="offset points", ha='center', va='bottom')
     st.pyplot(fig)
 
-# Zone-based data filter
+# Show data by zone
 def zone_data(df, zone_col, title, detected_zone=None):
     zones = df[zone_col].dropna().unique()
     if detected_zone and detected_zone in zones:
@@ -82,10 +87,10 @@ def zone_data(df, zone_col, title, detected_zone=None):
     else:
         selected_zone = st.selectbox(f"📍 Select Zone ({title}):", sorted(zones))
     filtered_data = df[df[zone_col] == selected_zone]
-    st.success(f"Showing {title.lower()} data for **{selected_zone}**")
+    st.success(f"Showing {title.lower()} data for *{selected_zone}*")
     st.dataframe(filtered_data)
 
-# Handle user input
+# Response to user query
 if user_input:
     query = user_input.lower()
     detected_zone = detect_zone(user_input, all_zones)
@@ -99,7 +104,7 @@ if user_input:
         bar_chart(accident_df, "Zone / Area", "No. of Cases", "Zone-wise Accident Cases", 'crimson')
 
     elif "pollution" in query or "air" in query:
-        st.subheader("🌫️ Air Pollution Overview")
+        st.subheader("🌫 Air Pollution Overview")
         zone_data(air_df, "Zone / Area", "Air Pollution", detected_zone)
         bar_chart(air_df, "Zone / Area", "Avg. Value (µg/m³) or AQI", "Zone-wise Air Pollution Levels", 'grey')
 
