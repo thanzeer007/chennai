@@ -3,13 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import spacy
-import spacy.cli
-import subprocess
 
-# Always download the model on server
-spacy.cli.download("en_core_web_sm")
-nlp = spacy.load("en_core_web_sm")
-# Streamlit page config
 st.set_page_config(page_title="Chennai Risk Chatbot AI", page_icon="🧠")
 st.markdown("""
     <style>
@@ -26,7 +20,7 @@ st.markdown("""
 st.title("🤖 Chennai AI Risk Chatbot")
 st.markdown("<p class='big-font'>Ask about <span class='highlight'>accidents, pollution, crime, heat, flood, population, or risk factors</span>.</p>", unsafe_allow_html=True)
 
-# Load Excel files
+# Load data
 accident_df = pd.read_excel("accident1.xlsx")
 air_df = pd.read_excel("air pollution.xlsx")
 crime_df = pd.read_excel("crime details 1.xlsx")
@@ -35,7 +29,10 @@ flood_df = pd.read_excel("flood.xlsx")
 population_df = pd.read_excel("population.xlsx")
 Riskfactor_df = pd.read_excel("riskanalysis.xlsx")
 
-# Combine all zone names
+# Load NLP model
+nlp = spacy.load("en_core_web_sm")
+
+# Combine all zones for detection
 all_zones = set(accident_df["Zone / Area"].dropna().unique()) | \
             set(air_df["Zone / Area"].dropna().unique()) | \
             set(crime_df["Zone Name"].dropna().unique()) | \
@@ -44,10 +41,11 @@ all_zones = set(accident_df["Zone / Area"].dropna().unique()) | \
             set(population_df["Zone Name"].dropna().unique()) | \
             set(Riskfactor_df["Area"].dropna().unique())
 
-# Input field
+# Get input from user
 user_input = st.chat_input("Type your questions here...")
 
-# Detect zone
+# Detect zone from user input
+
 def detect_zone(user_input, zones):
     doc = nlp(user_input.lower())
     for ent in doc.ents:
@@ -58,7 +56,7 @@ def detect_zone(user_input, zones):
             return z
     return None
 
-# Bar chart display
+# Bar chart function
 def bar_chart(df, x_col, y_col, title, color):
     df.columns = df.columns.str.strip()
     df[y_col] = pd.to_numeric(df[y_col], errors="coerce")
@@ -76,7 +74,7 @@ def bar_chart(df, x_col, y_col, title, color):
                     textcoords="offset points", ha='center', va='bottom')
     st.pyplot(fig)
 
-# Show data by zone
+# Zone-based data filter
 def zone_data(df, zone_col, title, detected_zone=None):
     zones = df[zone_col].dropna().unique()
     if detected_zone and detected_zone in zones:
@@ -84,10 +82,10 @@ def zone_data(df, zone_col, title, detected_zone=None):
     else:
         selected_zone = st.selectbox(f"📍 Select Zone ({title}):", sorted(zones))
     filtered_data = df[df[zone_col] == selected_zone]
-    st.success(f"Showing {title.lower()} data for *{selected_zone}*")
+    st.success(f"Showing {title.lower()} data for {selected_zone}")
     st.dataframe(filtered_data)
 
-# Response to user query
+# Handle user input
 if user_input:
     query = user_input.lower()
     detected_zone = detect_zone(user_input, all_zones)
